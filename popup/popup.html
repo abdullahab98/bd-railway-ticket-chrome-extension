@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BD Railway Ticket Quick Booker</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo-area">
+        <div class="train-icon">🚆</div>
+        <div>
+          <h1>BD Railway Ticket</h1>
+          <p class="subtitle">বাংলাদেশ রেলওয়ে টিকেট সহকারী</p>
+        </div>
+      </div>
+    </header>
+
+    <!-- Form Section -->
+    <main class="form-container">
+      <!-- Route Selection -->
+      <div class="card">
+        <div class="field-group">
+          <label for="from-station">
+            <span class="dot green-dot"></span> From (হতে)
+          </label>
+          <input type="text" id="from-station" list="from-stations-list" placeholder="e.g. Dhaka" value="Dhaka" autocomplete="off">
+        </div>
+
+        <div class="swap-wrapper">
+          <button type="button" id="btn-swap" title="Swap Stations (অদলবদল)" aria-label="Swap Stations">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="3" x2="12" y2="21"></line>
+              <polyline points="18 9 12 3 6 9"></polyline>
+              <polyline points="6 15 12 21 18 15"></polyline>
+            </svg>
+          </button>
+        </div>
+
+        <div class="field-group">
+          <label for="to-station">
+            <span class="dot red-dot"></span> To (গন্তব্য)
+          </label>
+          <input type="text" id="to-station" list="to-stations-list" placeholder="e.g. Joypurhat" value="Joypurhat" autocomplete="off">
+        </div>
+      </div>
+
+      <!-- Date Selection -->
+      <div class="card">
+        <div class="field-header">
+          <label for="journey-date">Date of Journey (যাত্রার তারিখ)</label>
+          <span class="formatted-tag" id="formatted-doj">21-Oct-2026</span>
+        </div>
+        <input type="date" id="journey-date">
+
+        <!-- Quick Date Buttons -->
+        <div class="quick-dates-label">Quick Selection:</div>
+        <div class="quick-dates-grid">
+          <button type="button" class="btn-pill" data-days="0">Today</button>
+          <button type="button" class="btn-pill" data-days="1">+1 Day</button>
+          <button type="button" class="btn-pill" data-days="2">+2 Days</button>
+          <button type="button" class="btn-pill" data-days="3">+3 Days</button>
+          <button type="button" class="btn-pill" data-days="7">+7 Days</button>
+          <button type="button" class="btn-pill btn-pill-accent" data-days="10" title="Bangladesh Railway 10 days advance ticket">+10 Days</button>
+        </div>
+      </div>
+
+      <!-- Seat Class Selection -->
+      <div class="card">
+        <label for="seat-class">Choose Class (আসন শ্রেণি)</label>
+        <select id="seat-class">
+          <option value="AC_B">AC Berth (AC_B) - এসি বার্থ</option>
+          <option value="AC_S">AC Seat (AC_S) - এসি সিট</option>
+          <option value="SNIGDHA">Snigdha (SNIGDHA) - স্নিগ্ধা / AC চেয়ার</option>
+          <option value="F_BERTH">First Class Berth (F_BERTH) - ১ম শ্রেণি বার্থ</option>
+          <option value="F_SEAT">First Class Seat (F_SEAT) - ১ম শ্রেণি সিট</option>
+          <option value="F_CHAIR">First Class Chair (F_CHAIR) - ১ম শ্রেণি চেয়ার</option>
+          <option value="S_CHAIR" selected>Shovon Chair (S_CHAIR) - শোভন চেয়ার</option>
+          <option value="SHOVAN">Shovon (SHOVAN) - শোভন</option>
+          <option value="SHULOV">Shulov (SHULOV) - সুলভ</option>
+          <option value="AC_CHAIR">AC Chair (AC_CHAIR) - এসি চেয়ার</option>
+        </select>
+      </div>
+
+      <!-- Train Selection -->
+      <div class="card">
+        <div class="field-header">
+          <label for="train-name">Choose Train (ট্রেন নির্বাচন)</label>
+          <button type="button" id="btn-clear-train" class="btn-link" title="Clear train selection">All Trains</button>
+        </div>
+        <input type="text" id="train-name" list="trains-list" placeholder="e.g. EKOTA EXPRESS (705) or All Trains" autocomplete="off">
+      </div>
+
+      <!-- Live URL Preview -->
+      <div class="card url-card">
+        <div class="field-header">
+          <label>Generated Search URL</label>
+          <button type="button" id="btn-copy-url" class="btn-link">Copy URL</button>
+        </div>
+        <div class="url-box" id="url-preview">https://eticket.railway.gov.bd/booking/train/search?...</div>
+      </div>
+
+      <!-- Auto Booking Assistant Settings -->
+      <div class="card auto-bot-card">
+        <div class="field-header">
+          <label>⚡ Auto Booking Assistant</label>
+          <span class="badge-tag">Smart Bot</span>
+        </div>
+
+        <div class="bot-option">
+          <label class="checkbox-label" for="auto-book-now">
+            <input type="checkbox" id="auto-book-now" checked>
+            <span>Auto Click <strong>"BOOK NOW"</strong></span>
+          </label>
+        </div>
+
+        <div class="bot-option-row">
+          <label class="checkbox-label" for="auto-select-seats">
+            <input type="checkbox" id="auto-select-seats" checked>
+            <span>Auto Select Seats</span>
+          </label>
+          <div class="seat-count-wrapper">
+            <select id="seat-count">
+              <option value="1" selected>1 Seat</option>
+              <option value="2">2 Seats</option>
+              <option value="3">3 Seats</option>
+              <option value="4">4 Seats</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="bot-option">
+          <label class="checkbox-label" for="auto-continue">
+            <input type="checkbox" id="auto-continue">
+            <span>Auto Click <strong>"CONTINUE PURCHASE"</strong></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="actions">
+        <button type="button" id="btn-search" class="btn btn-primary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          Search & Open Page (এখনই খুঁজুন)
+        </button>
+      </div>
+
+      <!-- 8:00 AM Auto-Open Feature -->
+      <div class="card schedule-card">
+        <div class="schedule-header">
+          <div class="schedule-title">
+            <span>⏰ 8:00 AM Ticket Rush Timer</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="schedule-toggle">
+            <span class="slider round"></span>
+          </label>
+        </div>
+        <p class="schedule-info">Automatically opens search page at 08:00:00 AM (western ticket release).</p>
+        <div class="countdown-text" id="countdown-text">Status: Off</div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Bangladesh Railway Stations & Trains Datalists -->
+  <datalist id="from-stations-list"></datalist>
+  <datalist id="to-stations-list"></datalist>
+  <datalist id="trains-list"></datalist>
+
+  <script src="stations.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
+
