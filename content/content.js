@@ -525,32 +525,116 @@
           return false;
         }
 
+        // Helper to prioritize available seats starting from the middle towards the side with more vacant seats
+        function getPrioritizedAvailableSeats() {
+          const allCoachButtons = Array.from(seatLayout.querySelectorAll('button.btn-seat, .btn-seat'));
+          if (allCoachButtons.length === 0) return { seats: [], preferredSide: 'Unknown' };
+
+          // Map all seats in coach to extract numeric number / visual index
+          const allSeatsMapped = allCoachButtons.map((btn, idx) => {
+            const text = (btn.title || btn.textContent || '').trim();
+            const numMatch = text.match(/\d+/);
+            const num = numMatch ? parseInt(numMatch[0], 10) : (idx + 1);
+            return {
+              btn,
+              idx,
+              title: text || `Seat ${idx + 1}`,
+              num
+            };
+          });
+
+          // Determine middle of coach
+          const allNums = allSeatsMapped.map(s => s.num);
+          const minNum = Math.min(...allNums);
+          const maxNum = Math.max(...allNums);
+          const midNum = (minNum + maxNum) / 2;
+
+          // Filter only available seats that haven't been clicked/selected yet
+          const availableMapped = allSeatsMapped.filter(s => {
+            const btn = s.btn;
+            return btn.classList.contains('seat-available') &&
+                   !btn.classList.contains('seat-booked') &&
+                   !btn.hasAttribute('disabled') &&
+                   !btn.dataset.botClicked &&
+                   !isSeatButtonSelected(btn);
+          });
+
+          if (availableMapped.length === 0) {
+            return { seats: [], midNum, lowerCount: 0, upperCount: 0, preferredSide: 'None' };
+          }
+
+          // Split available seats into Lower half (< midNum) and Upper half (>= midNum)
+          const lowerHalf = availableMapped.filter(s => s.num < midNum);
+          const upperHalf = availableMapped.filter(s => s.num >= midNum);
+
+          const lowerCount = lowerHalf.length;
+          const upperCount = upperHalf.length;
+
+          // Sort both halves by distance from middle ascending (closest to middle first!)
+          lowerHalf.sort((a, b) => Math.abs(a.num - midNum) - Math.abs(b.num - midNum));
+          upperHalf.sort((a, b) => Math.abs(a.num - midNum) - Math.abs(b.num - midNum));
+
+          // Pick direction that has more vacant seats (যেদিক বেশি ফাঁকা)
+          let prioritized = [];
+          let preferredSide = 'Balanced';
+
+          if (upperCount > lowerCount) {
+            // Upper half has more vacant seats -> pick from upper half (closest to middle first), then lower half
+            prioritized = [...upperHalf, ...lowerHalf];
+            preferredSide = 'Upper';
+          } else if (lowerCount > upperCount) {
+            // Lower half has more vacant seats -> pick from lower half (closest to middle first), then upper half
+            prioritized = [...lowerHalf, ...upperHalf];
+            preferredSide = 'Lower';
+          } else {
+            // Both sides have equal vacancies -> sort all available by distance from middle
+            prioritized = [...availableMapped].sort((a, b) => Math.abs(a.num - midNum) - Math.abs(b.num - midNum));
+            preferredSide = 'Balanced';
+          }
+
+          return {
+            seats: prioritized,
+            midNum,
+            lowerCount,
+            upperCount,
+            preferredSide
+          };
+        }
+
         const selectedTitles = [];
         let attempts = 0;
         const maxAttempts = targetSeatCount * 4;
+        let loggedStrategy = false;
 
         while (selectedTitles.length < targetSeatCount && attempts < maxAttempts) {
           if (isPaused) break;
           attempts++;
 
-          // Dynamically query available seats
-          const availableSeatButtons = Array.from(seatLayout.querySelectorAll('button.btn-seat.seat-available:not(.seat-booked):not([disabled])'))
-            .filter(btn => !btn.dataset.botClicked && !isSeatButtonSelected(btn));
+          // Get prioritized available seats based on coach middle and vacancies
+          const strategyResult = getPrioritizedAvailableSeats();
+          const availableSeats = strategyResult.seats || [];
 
-          if (availableSeatButtons.length === 0) {
+          if (!loggedStrategy && strategyResult.midNum !== undefined) {
+            loggedStrategy = true;
+            addLog(`💺 Coach Mid: ~${Math.round(strategyResult.midNum)} | Lower: ${strategyResult.lowerCount} vacant, Upper: ${strategyResult.upperCount} vacant`, 'info');
+            addLog(`🎯 Strategy: Starting from middle towards ${strategyResult.preferredSide} side (more vacant seats)`, 'info');
+          }
+
+          if (availableSeats.length === 0) {
             console.warn('[BD Railway Booker] No more available seats found in coach.');
             addLog(`⚠️ No more available seats found in coach`, 'warn');
             break;
           }
 
-          const btn = availableSeatButtons[0];
+          const targetSeatObj = availableSeats[0];
+          const btn = targetSeatObj.btn;
           btn.dataset.botClicked = 'true';
-          const seatTitle = btn.title || btn.textContent.trim() || `Seat ${selectedTitles.length + 1}`;
+          const seatTitle = targetSeatObj.title;
           const currentSeatNum = selectedTitles.length + 1;
           const countBefore = getCurrentlySelectedSeatCount();
 
-          updateStatus(`Clicking Seat ${currentSeatNum} of ${targetSeatCount}: <strong>${seatTitle}</strong>... (অপেক্ষা করা হচ্ছে নিশ্চিতকরণের জন্য)`);
-          addLog(`👉 Clicking Seat ${currentSeatNum}/${targetSeatCount}: "${seatTitle}" (waiting for confirmation)...`, 'info');
+          updateStatus(`Clicking Seat ${currentSeatNum} of ${targetSeatCount}: <strong>${seatTitle}</strong>... (মাঝের দিক হতে নিশ্চিতকরণের অপেক্ষা)`);
+          addLog(`👉 Clicking Seat ${currentSeatNum}/${targetSeatCount}: "${seatTitle}" (closest to middle in ${strategyResult.preferredSide} side)...`, 'info');
 
           // Click the seat
           btn.click();
