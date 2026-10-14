@@ -41,6 +41,7 @@
   let seatsSelected = false;
   let lastStatusHtml = '';
   let runner = null;
+  let isProcessingTrip = false;
 
   console.log('[BD Railway Booker] Initialized with config:', {
     targetClass,
@@ -347,106 +348,133 @@
   }
 
   // STEP 1 & 2: Find Train Card and Click "BOOK NOW"
-  function processTrainResults() {
-    if (isPaused || bookNowClicked) return;
+  async function processTrainResults() {
+    if (isPaused || bookNowClicked || isProcessingTrip) return;
+    isProcessingTrip = true;
 
-    const trips = document.querySelectorAll('app-single-trip');
-    if (!trips || trips.length === 0) return;
+    try {
+      const trips = document.querySelectorAll('app-single-trip');
+      if (!trips || trips.length === 0) return;
 
-    const targetModel = extractTrainModel(targetTrain);
-    const cleanTrainName = targetTrain.replace(/\(\d+\)/, '').trim().toLowerCase();
+      const targetModel = extractTrainModel(targetTrain);
+      const cleanTrainName = targetTrain.replace(/\(\d+\)/, '').trim().toLowerCase();
 
-    let matchedTrip = null;
+      let matchedTrip = null;
 
-    // Look for trip matching user's selected train
-    for (const trip of trips) {
-      const titleEl = trip.querySelector('.trip-left-info h2, .trip-name h2');
-      if (!titleEl) continue;
-      const tripText = titleEl.textContent || '';
-      const tripLower = tripText.toLowerCase();
+      // Look for trip matching user's selected train
+      for (const trip of trips) {
+        const titleEl = trip.querySelector('.trip-left-info h2, .trip-name h2');
+        if (!titleEl) continue;
+        const tripText = titleEl.textContent || '';
+        const tripLower = tripText.toLowerCase();
 
-      if (targetTrain) {
-        if ((targetModel && tripText.includes(targetModel)) || (cleanTrainName && tripLower.includes(cleanTrainName))) {
-          matchedTrip = trip;
+        if (targetTrain) {
+          if ((targetModel && tripText.includes(targetModel)) || (cleanTrainName && tripLower.includes(cleanTrainName))) {
+            matchedTrip = trip;
+            break;
+          }
+        } else {
+          // If no specific train chosen, pick first one with available seats for target class
+          const classEl = trip.querySelector(`.seat-classes-row .single-seat-class .seat-class-name`);
+          if (classEl) {
+            matchedTrip = trip;
+            break;
+          }
+        }
+      }
+
+      if (!matchedTrip) {
+        updateStatus(`Searching: Looking for <strong>${targetTrain || 'trains'}</strong>...`);
+        return;
+      }
+
+      // Train found! Highlight and scroll to it
+      const tripWrapper = matchedTrip.querySelector('.single-trip-wrapper') || matchedTrip;
+      if (!tripWrapper.dataset.botHighlighted) {
+        tripWrapper.dataset.botHighlighted = 'true';
+        tripWrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        tripWrapper.style.outline = '3px solid #006a4e';
+        tripWrapper.style.outlineOffset = '4px';
+        tripWrapper.style.borderRadius = '8px';
+        tripWrapper.style.boxShadow = '0 0 15px rgba(0, 106, 78, 0.35)';
+      }
+
+      const trainTitle = matchedTrip.querySelector('.trip-left-info h2')?.textContent?.trim() || targetTrain;
+
+      setStep(1, 'completed', `✓ Train found: <strong>${trainTitle}</strong>`);
+      addLog(`✅ Step 1: Matched "${trainTitle}"`, 'success');
+
+      // Auto-expand trip card if it is collapsed (off)
+      const collapsibleDiv = matchedTrip.querySelector('.trip-collapsible, .trip-div');
+      const isCollapsed = collapsibleDiv && (
+        collapsibleDiv.classList.contains('trip-collapsed') ||
+        collapsibleDiv.offsetHeight === 0 ||
+        (window.getComputedStyle(collapsibleDiv).display === 'none') ||
+        (window.getComputedStyle(collapsibleDiv).height === '0px')
+      );
+
+      if (isCollapsed) {
+        updateStatus(`📂 Expanding <strong>${trainTitle}</strong> card details...`, 'info');
+        addLog(`📂 Trip card is collapsed. Expanding "${trainTitle}"...`, 'info');
+
+        const collapseBtn = matchedTrip.querySelector('.trip-collapse-btn, button.rotate-collapse-btn, .trip-name button') || matchedTrip.querySelector('.trip-name');
+        if (collapseBtn) {
+          collapseBtn.click();
+          console.log('[BD Railway Booker] Clicked trip-collapse-btn to expand card.');
+          // Wait for Angular animation and DOM rendering
+          await sleep(350);
+        }
+      }
+
+      setStep(2, 'active', `Checking availability for <strong>${targetClass}</strong>...`);
+      addLog(`🔍 Step 2: Checking seat class "${targetClass}"...`, 'info');
+
+      // Find requested seat class in this train
+      const seatClasses = matchedTrip.querySelectorAll('.seat-classes-row .single-seat-class');
+      let targetSeatClassEl = null;
+
+      for (const sc of seatClasses) {
+        const nameEl = sc.querySelector('.seat-class-name');
+        if (nameEl && nameEl.textContent.trim().toUpperCase() === targetClass) {
+          targetSeatClassEl = sc;
           break;
+        }
+      }
+
+      if (!targetSeatClassEl) {
+        setStep(2, 'error', `Class <strong>${targetClass}</strong> not found on <strong>${trainTitle}</strong>.`);
+        addLog(`❌ Step 2: Class "${targetClass}" not found on ${trainTitle}`, 'error');
+        return;
+      }
+
+      // Check availability
+      const availableSeatsEl = targetSeatClassEl.querySelector('.all-seats');
+      const availableCount = availableSeatsEl ? parseInt(availableSeatsEl.textContent.trim(), 10) : 0;
+      const bookNowBtn = targetSeatClassEl.querySelector('.book-now-btn');
+
+      if (bookNowBtn && (availableCount > 0 || isNaN(availableCount))) {
+        setStep(2, 'completed', `🎉 <strong>${availableCount} seat(s)</strong> available for <strong>${targetClass}</strong>!`);
+        addLog(`✅ Step 2: ${availableCount} seat(s) available for "${targetClass}"`, 'success');
+
+        if (autoBookNow && !bookNowClicked) {
+          bookNowClicked = true;
+          setStep(3, 'active', `⚡ Auto-clicking <strong>BOOK NOW</strong> for ${targetClass}...`);
+          addLog(`⚡ Step 3: Clicking BOOK NOW for "${targetClass}"...`, 'info');
+
+          bookNowBtn.style.boxShadow = '0 0 12px #da291c';
+          setTimeout(() => {
+            bookNowBtn.click();
+            console.log('[BD Railway Booker] Clicked BOOK NOW button!');
+            setStep(3, 'completed', `✓ BOOK NOW clicked! Loading seat layout modal...`);
+            addLog(`✅ Step 3: BOOK NOW clicked! Seat layout loading...`, 'success');
+          }, 200);
         }
       } else {
-        // If no specific train chosen, pick first one with available seats for target class
-        const classEl = trip.querySelector(`.seat-classes-row .single-seat-class .seat-class-name`);
-        if (classEl) {
-          matchedTrip = trip;
-          break;
-        }
+        setStep(2, 'warn', `⚠️ No seats currently available for <strong>${targetClass}</strong> (${trainTitle}).`);
+        addLog(`⚠️ Step 2: 0 seats available for "${targetClass}"`, 'warn');
       }
-    }
-
-    if (!matchedTrip) {
-      updateStatus(`Searching: Looking for <strong>${targetTrain || 'trains'}</strong>...`);
-      return;
-    }
-
-    // Train found! Highlight and scroll to it
-    const tripWrapper = matchedTrip.querySelector('.single-trip-wrapper') || matchedTrip;
-    if (!tripWrapper.dataset.botHighlighted) {
-      tripWrapper.dataset.botHighlighted = 'true';
-      tripWrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      tripWrapper.style.outline = '3px solid #006a4e';
-      tripWrapper.style.outlineOffset = '4px';
-      tripWrapper.style.borderRadius = '8px';
-      tripWrapper.style.boxShadow = '0 0 15px rgba(0, 106, 78, 0.35)';
-    }
-
-    const trainTitle = matchedTrip.querySelector('.trip-left-info h2')?.textContent?.trim() || targetTrain;
-
-    setStep(1, 'completed', `✓ Train found: <strong>${trainTitle}</strong>`);
-    addLog(`✅ Step 1: Matched "${trainTitle}"`, 'success');
-
-    setStep(2, 'active', `Checking availability for <strong>${targetClass}</strong>...`);
-    addLog(`🔍 Step 2: Checking seat class "${targetClass}"...`, 'info');
-
-    // Find requested seat class in this train
-    const seatClasses = matchedTrip.querySelectorAll('.seat-classes-row .single-seat-class');
-    let targetSeatClassEl = null;
-
-    for (const sc of seatClasses) {
-      const nameEl = sc.querySelector('.seat-class-name');
-      if (nameEl && nameEl.textContent.trim().toUpperCase() === targetClass) {
-        targetSeatClassEl = sc;
-        break;
-      }
-    }
-
-    if (!targetSeatClassEl) {
-      setStep(2, 'error', `Class <strong>${targetClass}</strong> not found on <strong>${trainTitle}</strong>.`);
-      addLog(`❌ Step 2: Class "${targetClass}" not found on ${trainTitle}`, 'error');
-      return;
-    }
-
-    // Check availability
-    const availableSeatsEl = targetSeatClassEl.querySelector('.all-seats');
-    const availableCount = availableSeatsEl ? parseInt(availableSeatsEl.textContent.trim(), 10) : 0;
-    const bookNowBtn = targetSeatClassEl.querySelector('.book-now-btn');
-
-    if (bookNowBtn && (availableCount > 0 || isNaN(availableCount))) {
-      setStep(2, 'completed', `🎉 <strong>${availableCount} seat(s)</strong> available for <strong>${targetClass}</strong>!`);
-      addLog(`✅ Step 2: ${availableCount} seat(s) available for "${targetClass}"`, 'success');
-
-      if (autoBookNow && !bookNowClicked) {
-        bookNowClicked = true;
-        setStep(3, 'active', `⚡ Auto-clicking <strong>BOOK NOW</strong> for ${targetClass}...`);
-        addLog(`⚡ Step 3: Clicking BOOK NOW for "${targetClass}"...`, 'info');
-
-        bookNowBtn.style.boxShadow = '0 0 12px #da291c';
-        setTimeout(() => {
-          bookNowBtn.click();
-          console.log('[BD Railway Booker] Clicked BOOK NOW button!');
-          setStep(3, 'completed', `✓ BOOK NOW clicked! Loading seat layout modal...`);
-          addLog(`✅ Step 3: BOOK NOW clicked! Seat layout loading...`, 'success');
-        }, 200);
-      }
-    } else {
-      setStep(2, 'warn', `⚠️ No seats currently available for <strong>${targetClass}</strong> (${trainTitle}).`);
-      addLog(`⚠️ Step 2: 0 seats available for "${targetClass}"`, 'warn');
+    } finally {
+      isProcessingTrip = false;
     }
   }
 
