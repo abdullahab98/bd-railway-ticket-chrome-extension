@@ -21,9 +21,13 @@ const autoContinueCheckbox = document.getElementById('auto-continue');
 const urlPreviewDiv = document.getElementById('url-preview');
 const btnCopyUrl = document.getElementById('btn-copy-url');
 const btnSearch = document.getElementById('btn-search');
+const saveStatus = document.getElementById('save-status');
+const btnReset = document.getElementById('btn-reset');
 const quickDateButtons = document.querySelectorAll('.btn-pill');
 const scheduleToggle = document.getElementById('schedule-toggle');
 const countdownText = document.getElementById('countdown-text');
+
+let saveTimeout = null;
 
 // Populate Autocomplete Datalists from BD_STATIONS dataset
 function populateStationDatalists() {
@@ -208,6 +212,69 @@ function updateUi() {
       btn.classList.remove('active');
     }
   });
+
+  savePreferences();
+}
+
+// Auto-save user preferences to chrome.storage.local
+function savePreferences() {
+  if (saveTimeout) clearTimeout(saveTimeout);
+
+  if (saveStatus) {
+    saveStatus.textContent = 'Saving...';
+    saveStatus.className = 'status-badge saving';
+  }
+
+  saveTimeout = setTimeout(async () => {
+    try {
+      await chrome.storage.local.set({
+        fromStation: fromStationInput.value.trim(),
+        toStation: toStationInput.value.trim(),
+        journeyDate: journeyDateInput.value,
+        seatClass: seatClassSelect.value,
+        selectedTrain: trainNameInput.value.trim(),
+        autoBookNow: autoBookNowCheckbox ? autoBookNowCheckbox.checked : true,
+        autoSelectSeats: autoSelectSeatsCheckbox ? autoSelectSeatsCheckbox.checked : true,
+        seatCount: seatCountSelect ? parseInt(seatCountSelect.value, 10) : 1,
+        autoContinue: autoContinueCheckbox ? autoContinueCheckbox.checked : false,
+        targetUrl: buildSearchUrl()
+      });
+
+      if (saveStatus) {
+        saveStatus.textContent = '✓ Saved';
+        saveStatus.className = 'status-badge';
+      }
+    } catch (err) {
+      console.error('Failed to save preferences:', err);
+    }
+  }, 250);
+}
+
+// Reset form and saved preferences to defaults
+async function resetDefaults() {
+  fromStationInput.value = 'Dhaka';
+  toStationInput.value = 'Joypurhat';
+  seatClassSelect.value = 'S_CHAIR';
+  trainNameInput.value = '';
+
+  const advanceDate = new Date();
+  advanceDate.setDate(advanceDate.getDate() + 10);
+  journeyDateInput.value = toDateInputValue(advanceDate);
+
+  if (autoBookNowCheckbox) autoBookNowCheckbox.checked = true;
+  if (autoSelectSeatsCheckbox) autoSelectSeatsCheckbox.checked = true;
+  if (seatCountSelect) seatCountSelect.value = '1';
+  if (autoContinueCheckbox) autoContinueCheckbox.checked = false;
+
+  updateUi();
+
+  if (saveStatus) {
+    saveStatus.textContent = '✓ Reset';
+    saveStatus.className = 'status-badge';
+    setTimeout(() => {
+      saveStatus.textContent = '✓ Saved';
+    }, 1200);
+  }
 }
 
 // Set Date by Offset
@@ -353,25 +420,69 @@ async function init() {
   const today = new Date();
   journeyDateInput.min = toDateInputValue(today);
 
-  // Fresh default values every time popup is opened (no permanent auto-saving)
-  fromStationInput.value = 'Dhaka';
-  toStationInput.value = 'Joypurhat';
-  seatClassSelect.value = 'S_CHAIR';
-  trainNameInput.value = '';
-
-  const advanceDate = new Date();
-  advanceDate.setDate(advanceDate.getDate() + 10);
-  journeyDateInput.value = toDateInputValue(advanceDate);
-
-  if (autoBookNowCheckbox) autoBookNowCheckbox.checked = true;
-  if (autoSelectSeatsCheckbox) autoSelectSeatsCheckbox.checked = true;
-  if (seatCountSelect) seatCountSelect.value = '1';
-  if (autoContinueCheckbox) autoContinueCheckbox.checked = false;
-
-  // Check 8:00 AM schedule timer status
+  // Load saved preferences from chrome.storage.local
   try {
-    const saved = await chrome.storage.local.get(['scheduleEnabled', 'scheduleTargetTimestamp']);
+    const saved = await chrome.storage.local.get([
+      'fromStation',
+      'toStation',
+      'journeyDate',
+      'seatClass',
+      'selectedTrain',
+      'autoBookNow',
+      'autoSelectSeats',
+      'seatCount',
+      'autoContinue',
+      'scheduleEnabled',
+      'scheduleTargetTimestamp'
+    ]);
 
+    if (saved.fromStation) fromStationInput.value = saved.fromStation;
+    else fromStationInput.value = 'Dhaka';
+
+    if (saved.toStation) toStationInput.value = saved.toStation;
+    else toStationInput.value = 'Joypurhat';
+
+    if (saved.seatClass) seatClassSelect.value = saved.seatClass;
+    else seatClassSelect.value = 'S_CHAIR';
+
+    if (saved.selectedTrain !== undefined) trainNameInput.value = saved.selectedTrain;
+    else trainNameInput.value = '';
+
+    if (saved.autoBookNow !== undefined && autoBookNowCheckbox) autoBookNowCheckbox.checked = saved.autoBookNow;
+    else if (autoBookNowCheckbox) autoBookNowCheckbox.checked = true;
+
+    if (saved.autoSelectSeats !== undefined && autoSelectSeatsCheckbox) autoSelectSeatsCheckbox.checked = saved.autoSelectSeats;
+    else if (autoSelectSeatsCheckbox) autoSelectSeatsCheckbox.checked = true;
+
+    if (saved.seatCount && seatCountSelect) seatCountSelect.value = String(saved.seatCount);
+    else if (seatCountSelect) seatCountSelect.value = '1';
+
+    if (saved.autoContinue !== undefined && autoContinueCheckbox) autoContinueCheckbox.checked = saved.autoContinue;
+    else if (autoContinueCheckbox) autoContinueCheckbox.checked = false;
+
+    // Intelligent date restoration:
+    // If saved journey date is today or in the future, keep it.
+    // If it was in the past (or not set), default to 10 days in advance.
+    const todayZero = new Date();
+    todayZero.setHours(0, 0, 0, 0);
+
+    if (saved.journeyDate) {
+      const savedDateObj = parseDateInput(saved.journeyDate);
+      savedDateObj.setHours(0, 0, 0, 0);
+      if (savedDateObj.getTime() >= todayZero.getTime()) {
+        journeyDateInput.value = saved.journeyDate;
+      } else {
+        const advanceDate = new Date();
+        advanceDate.setDate(advanceDate.getDate() + 10);
+        journeyDateInput.value = toDateInputValue(advanceDate);
+      }
+    } else {
+      const advanceDate = new Date();
+      advanceDate.setDate(advanceDate.getDate() + 10);
+      journeyDateInput.value = toDateInputValue(advanceDate);
+    }
+
+    // Check 8:00 AM schedule timer status
     if (saved.scheduleEnabled && saved.scheduleTargetTimestamp) {
       if (saved.scheduleTargetTimestamp > Date.now()) {
         scheduleToggle.checked = true;
@@ -386,7 +497,7 @@ async function init() {
       countdownText.textContent = 'Status: Off';
     }
   } catch (err) {
-    console.error('Failed to load schedule state:', err);
+    console.error('Failed to load saved preferences:', err);
   }
 
   updateUi();
@@ -404,6 +515,12 @@ async function init() {
   trainNameInput.addEventListener('input', updateUi);
   trainNameInput.addEventListener('blur', handleTrainBlur);
   btnClearTrain.addEventListener('click', clearSelectedTrain);
+
+  if (autoBookNowCheckbox) autoBookNowCheckbox.addEventListener('change', updateUi);
+  if (autoSelectSeatsCheckbox) autoSelectSeatsCheckbox.addEventListener('change', updateUi);
+  if (seatCountSelect) seatCountSelect.addEventListener('change', updateUi);
+  if (autoContinueCheckbox) autoContinueCheckbox.addEventListener('change', updateUi);
+  if (btnReset) btnReset.addEventListener('click', resetDefaults);
 
   btnSwap.addEventListener('click', swapStations);
   btnSearch.addEventListener('click', openSearchPage);
