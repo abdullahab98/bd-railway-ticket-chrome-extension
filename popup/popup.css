@@ -439,4 +439,142 @@ input:checked + .slider:before {
   background: #ffffff;
 }
 
+/* Version & Update Card */
+.version-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.version-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.version-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #334155;
+}
+
+.version-icon {
+  font-size: 13px;
+}
+
+.version-status-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.version-status-badge.checking {
+  background-color: #f1f5f9;
+  color: #64748b;
+}
+
+.version-status-badge.up-to-date {
+  background-color: #dcfce7;
+  color: #15803d;
+}
+
+.version-status-badge.outdated {
+  background-color: #fee2e2;
+  color: #b91c1c;
+  animation: pulse-badge 2s infinite;
+}
+
+.version-status-badge.ahead {
+  background-color: #e0f2fe;
+  color: #0369a1;
+}
+
+.version-status-badge.error {
+  background-color: #fef3c7;
+  color: #b45309;
+}
+
+@keyframes pulse-badge {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    transform: scale(1.03);
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.15);
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.version-details {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.35;
+  margin-bottom: 7px;
+}
+
+.version-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.btn-version-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-version-action:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.btn-version-action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-version-link {
+  font-size: 11px;
+  font-weight: 600;
+  color: #006a4e;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.btn-version-link:hover {
+  text-decoration: underline;
+}
+
+
 

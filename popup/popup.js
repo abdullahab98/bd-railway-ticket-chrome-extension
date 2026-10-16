@@ -26,6 +26,16 @@ const btnReset = document.getElementById('btn-reset');
 const quickDateButtons = document.querySelectorAll('.btn-pill');
 const scheduleToggle = document.getElementById('schedule-toggle');
 const countdownText = document.getElementById('countdown-text');
+const appVersionEl = document.getElementById('app-version');
+const versionStatusBadge = document.getElementById('version-status-badge');
+const versionDetails = document.getElementById('version-details');
+const btnCheckUpdate = document.getElementById('btn-check-update');
+
+const LOCAL_VERSION = (typeof chrome !== 'undefined' && chrome.runtime?.getManifest)
+  ? chrome.runtime.getManifest().version
+  : '1.0.0';
+const GITHUB_REPO_OWNER = 'abdullahab98';
+const GITHUB_REPO_NAME = 'bd-railway-ticket-chrome-extension';
 
 let saveTimeout = null;
 
@@ -534,6 +544,12 @@ async function init() {
     });
   });
 
+  // Version & Update Checker
+  if (btnCheckUpdate) {
+    btnCheckUpdate.addEventListener('click', () => checkVersionAndUpdateUI(true));
+  }
+  checkVersionAndUpdateUI(false);
+
   // Update countdown every second if schedule active
   setInterval(async () => {
     if (scheduleToggle.checked) {
@@ -543,4 +559,111 @@ async function init() {
   }, 1000);
 }
 
+// Compare semantic version strings (e.g. "1.0.0" vs "1.0.1")
+function compareSemver(v1, v2) {
+  const parts1 = String(v1).replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
+  const parts2 = String(v2).replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
+  const maxLen = Math.max(parts1.length, parts2.length);
+  for (let i = 0; i < maxLen; i++) {
+    const num1 = parts1[i] || 0;
+    const num2 = parts2[i] || 0;
+    if (num1 > num2) return 1;
+    if (num1 < num2) return -1;
+  }
+  return 0;
+}
+
+// Check remote GitHub repository to detect if local version is up to date or backdated
+async function checkVersionAndUpdateUI(isManual = false) {
+  if (!appVersionEl || !versionStatusBadge || !versionDetails) return;
+
+  appVersionEl.textContent = `v${LOCAL_VERSION}`;
+
+  if (isManual && btnCheckUpdate) {
+    btnCheckUpdate.disabled = true;
+    btnCheckUpdate.innerHTML = `
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;">
+        <polyline points="23 4 23 10 17 10"></polyline>
+        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+      </svg>
+      Checking...
+    `;
+  }
+
+  versionStatusBadge.className = 'version-status-badge checking';
+  versionStatusBadge.textContent = 'Checking...';
+  versionDetails.textContent = 'Connecting to GitHub repository...';
+
+  try {
+    // 1. Fetch remote manifest.json directly from GitHub raw content
+    const manifestUrl = `https://raw.githubusercontent.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/main/manifest.json?t=${Date.now()}`;
+    const manifestRes = await fetch(manifestUrl, { cache: 'no-store' });
+    
+    if (!manifestRes.ok) {
+      throw new Error(`Failed to fetch manifest: HTTP ${manifestRes.status}`);
+    }
+
+    const remoteManifest = await manifestRes.json();
+    const remoteVersion = remoteManifest.version || '1.0.0';
+
+    const semverDiff = compareSemver(LOCAL_VERSION, remoteVersion);
+
+    if (semverDiff < 0) {
+      // Outdated version (Backdate)
+      versionStatusBadge.className = 'version-status-badge outdated';
+      versionStatusBadge.textContent = `⚠️ Update: v${remoteVersion}`;
+      versionDetails.innerHTML = `New version <strong>v${remoteVersion}</strong> available on GitHub! Your local is <strong>backdated (v${LOCAL_VERSION})</strong>. Run <code>git pull</code> to update.`;
+      return;
+    } else if (semverDiff > 0) {
+      // Local version ahead of GitHub
+      versionStatusBadge.className = 'version-status-badge ahead';
+      versionStatusBadge.textContent = `🚀 v${LOCAL_VERSION} (Dev)`;
+      versionDetails.innerHTML = `Local version <strong>v${LOCAL_VERSION}</strong> is ahead of GitHub main (v${remoteVersion}).`;
+      return;
+    }
+
+    // 2. Semver matches: Fetch latest commit info on GitHub main branch for reference
+    let remoteCommitSha = null;
+    try {
+      const commitRes = await fetch(`https://api.github.com/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/commits/main`, {
+        headers: { 'Accept': 'application/vnd.github.v3+json' },
+        cache: 'no-store'
+      });
+      if (commitRes.ok) {
+        const commitData = await commitRes.json();
+        remoteCommitSha = commitData.sha ? commitData.sha.substring(0, 7) : null;
+      }
+    } catch (commitErr) {
+      console.warn('GitHub commit API query skipped or rate limited:', commitErr);
+    }
+
+    // Clean and completely up to date
+    versionStatusBadge.className = 'version-status-badge up-to-date';
+    versionStatusBadge.textContent = '✓ Up to Date';
+    if (remoteCommitSha) {
+      versionDetails.innerHTML = `You are running the latest version (<strong>v${LOCAL_VERSION}</strong>). Matches GitHub main branch (commit <code>${remoteCommitSha}</code>).`;
+    } else {
+      versionDetails.innerHTML = `You are running the latest version (<strong>v${LOCAL_VERSION}</strong>). Local extension is up to date.`;
+    }
+
+  } catch (err) {
+    console.error('Version check failed:', err);
+    versionStatusBadge.className = 'version-status-badge error';
+    versionStatusBadge.textContent = 'Check Failed';
+    versionDetails.innerHTML = `Could not verify with GitHub (offline or network error). Local version: <strong>v${LOCAL_VERSION}</strong>.`;
+  } finally {
+    if (btnCheckUpdate) {
+      btnCheckUpdate.disabled = false;
+      btnCheckUpdate.innerHTML = `
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="23 4 23 10 17 10"></polyline>
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+        </svg>
+        Check Update
+      `;
+    }
+  }
+}
+
 document.addEventListener('DOMContentLoaded', init);
+

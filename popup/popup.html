@@ -169,6 +169,32 @@
         <p class="schedule-info">Automatically opens search page at 08:00:00 AM (western ticket release).</p>
         <div class="countdown-text" id="countdown-text">Status: Off</div>
       </div>
+
+      <!-- Version & Update Status Card -->
+      <div class="card version-card">
+        <div class="version-header">
+          <div class="version-title">
+            <span class="version-icon">🏷️</span>
+            <span class="version-text">Version: <strong id="app-version">v1.0.0</strong></span>
+          </div>
+          <span class="version-status-badge checking" id="version-status-badge">Checking...</span>
+        </div>
+        <div class="version-details" id="version-details">
+          Comparing local version with GitHub repository...
+        </div>
+        <div class="version-actions">
+          <button type="button" id="btn-check-update" class="btn-version-action">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+            </svg>
+            Check Update
+          </button>
+          <a href="https://github.com/abdullahab98/bd-railway-ticket-chrome-extension" target="_blank" class="btn-version-link" id="link-github-repo" title="Open repository on GitHub">
+            GitHub Repo ↗
+          </a>
+        </div>
+      </div>
     </main>
   </div>
 
