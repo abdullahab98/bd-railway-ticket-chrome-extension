@@ -31,9 +31,14 @@ const versionStatusBadge = document.getElementById('version-status-badge');
 const versionDetails = document.getElementById('version-details');
 const btnCheckUpdate = document.getElementById('btn-check-update');
 
-const LOCAL_VERSION = (typeof chrome !== 'undefined' && chrome.runtime?.getManifest)
-  ? chrome.runtime.getManifest().version
-  : '1.0.0';
+// ============================================================================
+// 📌 EXTENSION VERSION CONFIGURATION
+// Change this variable whenever making any modification or new release:
+// ============================================================================
+const CURRENT_VERSION = '1.0.1';
+// ============================================================================
+
+const LOCAL_VERSION = CURRENT_VERSION || (typeof chrome !== 'undefined' && chrome.runtime?.getManifest?.()?.version) || '1.0.1';
 const GITHUB_REPO_OWNER = 'abdullahab98';
 const GITHUB_REPO_NAME = 'bd-railway-ticket-chrome-extension';
 
